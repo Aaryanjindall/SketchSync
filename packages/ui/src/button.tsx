@@ -19,7 +19,7 @@ export const Button = ({ size, variant, className, onClick, children  }: ButtonP
       `}
       onClick={onClick}
     >
-      {children}
+      {children as any}
     </button>
   );
 };

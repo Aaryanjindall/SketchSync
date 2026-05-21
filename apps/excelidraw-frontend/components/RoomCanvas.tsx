@@ -21,6 +21,8 @@ export function RoomCanvas({ roomSlug }: { roomSlug: string }) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  const [activeUsers, setActiveUsers] = useState<{id: string, name: string}[]>([]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -73,7 +75,7 @@ export function RoomCanvas({ roomSlug }: { roomSlug: string }) {
             type: "join_room",
             roomId: numericRoomId,
           });
-          ws.send(data);
+          ws?.send(data);
         };
 
         ws.onclose = () => {
@@ -124,37 +126,88 @@ export function RoomCanvas({ roomSlug }: { roomSlug: string }) {
 
   if (loading || !roomId || !socket) {
     return (
-      <div className="w-screen h-screen flex items-center justify-center bg-slate-900 text-slate-100">
-        <p>Connecting to room...</p>
+      <div className="w-screen h-screen flex flex-col items-center justify-center bg-[#0a0c10] relative overflow-hidden">
+        <div className="absolute top-[20%] left-[20%] w-[400px] h-[400px] rounded-full bg-indigo-600/10 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[20%] right-[20%] w-[500px] h-[500px] rounded-full bg-cyan-600/10 blur-[120px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.15)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none opacity-60" />
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-white font-bold text-xl shadow-[0_0_20px_rgba(99,102,241,0.4)] animate-pulse mb-4 z-10">
+            SS
+        </div>
+        <p className="text-slate-300 font-medium">Establishing secure connection...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-gradient-to-b from-black via-slate-950 to-black">
-      <header className="px-4 py-3 bg-black/90 border-b border-emerald-500/30 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-md bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">
+    <div className="w-screen h-screen flex flex-col bg-[#0a0c10] relative overflow-hidden">
+      {/* Background Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-600/5 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full bg-cyan-600/5 blur-[150px] pointer-events-none" />
+      
+      {/* Blackboard Dotted Grid */}
+      <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.15)_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none opacity-60" />
+
+      {/* Header Overlay */}
+      <header className="px-6 py-3 border-b border-white/10 flex items-center justify-between z-20 bg-white/[0.02] backdrop-blur-xl shadow-lg">
+        <div className="flex items-center gap-4">
+          <div className="h-10 w-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
             SS
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-emerald-400">
-              Room
+            <div className="flex items-center gap-2">
+               <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+               <div className="text-[10px] uppercase tracking-widest text-indigo-400 font-semibold">
+                 Live Session
+               </div>
             </div>
-            <div className="text-lg font-semibold text-slate-50">
+            <div className="text-xl font-bold text-slate-50 tracking-tight">
               {roomSlug}
             </div>
           </div>
         </div>
+        
         <div className="flex items-center gap-4">
+          {/* Active Users Section for Admin */}
+          {isAdmin && activeUsers.length > 0 && (
+            <div className="flex items-center gap-2 group relative">
+              <div className="flex -space-x-2 mr-2">
+                {activeUsers.slice(0, 3).map((u, i) => (
+                  <div key={u.id} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-[#050505] shadow-sm ${i === 0 ? 'bg-indigo-500' : i === 1 ? 'bg-purple-500' : 'bg-blue-500'}`}>
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                ))}
+                {activeUsers.length > 3 && (
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-slate-700 border-2 border-[#050505] shadow-sm">
+                    +{activeUsers.length - 3}
+                  </div>
+                )}
+              </div>
+              
+              {/* Tooltip for Active Users List */}
+              <div className="absolute top-full right-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto p-2 z-50">
+                <div className="text-xs font-semibold text-slate-400 px-2 pb-2 mb-2 border-b border-white/10 uppercase tracking-wider">
+                  Active Users ({activeUsers.length})
+                </div>
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {activeUsers.map(u => (
+                    <div key={u.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/5 rounded-md transition-colors text-sm text-slate-200">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                      <span className="truncate">{u.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {user && (
-            <div className="flex items-center gap-2 text-sm text-slate-200">
-              <span className="text-slate-400">User</span>
-              <span className="font-semibold">
+            <div className="flex items-center gap-2 text-sm px-4 py-1.5 rounded-full bg-black/40 border border-white/5 hidden sm:flex">
+              <span className="text-slate-400">Collaborator:</span>
+              <span className="font-semibold text-slate-200">
                 {user.name || user.email}
               </span>
               {isAdmin && (
-                <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-amber-500 text-black">
+                <span className="ml-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm">
                   Admin
                 </span>
               )}
@@ -162,16 +215,17 @@ export function RoomCanvas({ roomSlug }: { roomSlug: string }) {
           )}
           {isAdmin && (
             <button
-              className="px-3 py-1.5 rounded-md bg-red-500/90 hover:bg-red-600 text-xs font-medium text-white border border-red-400/60"
+              className="px-4 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-sm font-semibold text-red-400 border border-red-500/20 transition-all hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
               onClick={handleClearBoard}
             >
-              Clear board
+              Clear Canvas
             </button>
           )}
         </div>
       </header>
-      <main className="flex-1">
-        <Canvas roomId={roomId} socket={socket} />
+      
+      <main className="flex-1 relative z-10">
+        <Canvas roomId={roomId} socket={socket} onUsersUpdate={setActiveUsers} />
       </main>
     </div>
   );

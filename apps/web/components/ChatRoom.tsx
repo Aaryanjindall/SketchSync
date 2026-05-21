@@ -9,7 +9,7 @@ async function getChats(roomId: string) {
 
 export async function ChatRoom({id}: {
     id: string
-}) {
+}): Promise<React.ReactElement> {
     const messages = await getChats(id);
     return <ChatRoomClient id={id} messages={messages} />
 }

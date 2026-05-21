@@ -10,7 +10,7 @@ export function ChatRoomClient({
 }: {
     messages: {message: string}[];
     id: string
-}) {
+}): React.ReactElement {
     const [chats, setChats] = useState(messages);
     const [currentMessage, setCurrentMessage] = useState("");
     const {socket, loading} = useSocket();

@@ -4,7 +4,7 @@ import { useState } from "react";
 import styles from "./page.module.css";
 import { useRouter } from "next/navigation";
 
-export default function Home() {
+export default function Home(): React.ReactElement {
   const [roomId, setRoomId] = useState("");
   const router = useRouter();
 
