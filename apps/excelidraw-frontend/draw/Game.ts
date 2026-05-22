@@ -68,8 +68,9 @@ export class Game {
     }
 
     async init() {
-        this.existingShapes = await getExistingShapes(this.roomId);
-        console.log(this.existingShapes);
+        const fetchedShapes = await getExistingShapes(this.roomId);
+        // Merge shapes to ensure we don't lose any drawn while fetching
+        this.existingShapes = [...fetchedShapes, ...this.existingShapes];
         this.clearCanvas();
     }
 
@@ -102,24 +103,23 @@ export class Game {
     clearCanvas() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        this.existingShapes.map((shape) => {
+        this.existingShapes.forEach((shape) => {
+            this.ctx.strokeStyle = shape.color || "rgba(255, 255, 255)";
+            
             if (shape.type === "rect") {
-                this.ctx.strokeStyle = shape.color || "rgba(255, 255, 255)"
                 this.ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
             } else if (shape.type === "circle") {
-                this.ctx.strokeStyle = shape.color || "rgba(255, 255, 255)"
                 this.ctx.beginPath();
                 this.ctx.arc(shape.centerX, shape.centerY, Math.abs(shape.radius), 0, Math.PI * 2);
                 this.ctx.stroke();
             } else if (shape.type === "pencil") {
-                this.ctx.strokeStyle = shape.color || "rgba(255, 255, 255)"
                 this.ctx.beginPath();
                 this.ctx.moveTo(shape.startX, shape.startY);
                 this.ctx.lineTo(shape.endX, shape.endY);
                 this.ctx.stroke();
                 this.ctx.closePath();
             }
-        })
+        });
     }
 
     private getCoordinates(e: MouseEvent | {clientX: number, clientY: number}) {
@@ -197,15 +197,12 @@ export class Game {
             this.clearCanvas();
             this.ctx.strokeStyle = this.selectedColor;
             const selectedTool = this.selectedTool;
-            console.log(selectedTool)
             if (selectedTool === "rect") {
                 this.ctx.strokeRect(this.startX, this.startY, width, height);   
             } else if (selectedTool === "circle") {
                 const radius = Math.max(width, height) / 2;
-                const centerX = this.startX + radius;
-                const centerY = this.startY + radius;
                 this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, Math.abs(radius), 0, Math.PI * 2);
+                this.ctx.arc(this.startX + radius, this.startY + radius, Math.abs(radius), 0, Math.PI * 2);
                 this.ctx.stroke();
                 this.ctx.closePath();                
             } else if (selectedTool === "pencil") {

@@ -11,12 +11,7 @@ export function middleware(req: Request, res: Response, next: NextFunction) {
     });
   }
 
-  let token: string;
-  if (authHeader.startsWith("Bearer ")) {
-    token = authHeader.slice(7);
-  } else {
-    token = authHeader;
-  }
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;

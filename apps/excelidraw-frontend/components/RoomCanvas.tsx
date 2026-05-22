@@ -61,11 +61,7 @@ export function RoomCanvas({ roomSlug }: { roomSlug: string }) {
         const numericRoomId = String(room.id);
         setRoomId(numericRoomId);
 
-        if (me && room.adminId === me.id) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
+        setIsAdmin(me?.id === room.adminId);
 
         ws = new WebSocket(`${WS_URL}?token=${token}`);
 

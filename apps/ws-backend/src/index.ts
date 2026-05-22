@@ -14,23 +14,26 @@ interface User {
 
 const users: User[] = [];
 
+function broadcastActiveUsers(roomIdStr: string) {
+  const usersInRoom = users.filter(u => u.rooms.includes(roomIdStr)).map(u => ({ id: u.userId, name: u.name }));
+  users.forEach(user => {
+    if (user.rooms.includes(roomIdStr) && user.ws.readyState === WebSocket.OPEN) {
+      user.ws.send(JSON.stringify({
+        type: "active_users",
+        users: usersInRoom,
+        roomId: roomIdStr
+      }));
+    }
+  });
+}
+
 function checkUser(token: string): string | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    if (typeof decoded == "string") {
-      return null;
-    }
-
-    if (!decoded || !decoded.userId) {
-      return null;
-    }
-
-    return decoded.userId;
-  } catch(e) {
+    const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
+    return decoded?.userId || null;
+  } catch {
     return null;
   }
-  return null;
 }
 
 wss.on('connection', async function connection(ws, request) {
@@ -46,18 +49,27 @@ wss.on('connection', async function connection(ws, request) {
     ws.close()
     return null;
   }
-
-  const dbUser = await prismaClient.user.findUnique({ where: { id: userId } });
-  if (!dbUser) {
-    ws.close();
-    return;
-  }
-
   users.push({
     userId,
-    name: dbUser.name || "Anonymous",
+    name: "Anonymous",
     rooms: [],
     ws
+  });
+
+  // Fetch name asynchronously so we don't block incoming socket messages like join_room
+  prismaClient.user.findUnique({ where: { id: userId } }).then(dbUser => {
+    if (!dbUser) {
+      ws.close();
+      return;
+    }
+    const u = users.find(x => x.ws === ws);
+    if (u) {
+      u.name = dbUser.name || "Anonymous";
+      u.rooms.forEach(roomIdStr => broadcastActiveUsers(roomIdStr));
+    }
+  }).catch(err => {
+    console.error("Failed to fetch user", err);
+    ws.close();
   });
 
   ws.on('close', () => {
@@ -66,30 +78,17 @@ wss.on('connection', async function connection(ws, request) {
       const leavingUser = users[index];
       users.splice(index, 1);
       
-      leavingUser.rooms.forEach(roomIdStr => {
-        const usersInRoom = users.filter(u => u.rooms.includes(roomIdStr)).map(u => ({ id: u.userId, name: u.name }));
-        users.forEach(user => {
-          if (user.rooms.includes(roomIdStr)) {
-            user.ws.send(JSON.stringify({
-              type: "active_users",
-              users: usersInRoom,
-              roomId: roomIdStr
-            }));
-          }
+      if (leavingUser && leavingUser.rooms) {
+        leavingUser.rooms.forEach(roomIdStr => {
+          broadcastActiveUsers(roomIdStr);
         });
-      });
+      }
     }
   });
 
   ws.on('message', async function message(data) {
   try {
-    let parsedData;
-
-    if (typeof data !== "string") {
-      parsedData = JSON.parse(data.toString());
-    } else {
-      parsedData = JSON.parse(data);
-    }
+    const parsedData = JSON.parse(data.toString());
 
     console.log("message received");
     console.log(parsedData);
@@ -102,17 +101,7 @@ wss.on('connection', async function connection(ws, request) {
       const roomIdStr = parsedData.roomId?.toString();
       if (roomIdStr && !currentUser.rooms.includes(roomIdStr)) {
         currentUser.rooms.push(roomIdStr);
-        
-        const usersInRoom = users.filter(u => u.rooms.includes(roomIdStr)).map(u => ({ id: u.userId, name: u.name }));
-        users.forEach(user => {
-          if (user.rooms.includes(roomIdStr)) {
-            user.ws.send(JSON.stringify({
-              type: "active_users",
-              users: usersInRoom,
-              roomId: roomIdStr
-            }));
-          }
-        });
+        broadcastActiveUsers(roomIdStr);
       }
       return;
     }
@@ -123,17 +112,9 @@ wss.on('connection', async function connection(ws, request) {
       currentUser.rooms = currentUser.rooms.filter(
         x => x !== roomIdStr
       );
-      
-      const usersInRoom = users.filter(u => u.rooms.includes(roomIdStr)).map(u => ({ id: u.userId, name: u.name }));
-      users.forEach(user => {
-        if (user.rooms.includes(roomIdStr)) {
-          user.ws.send(JSON.stringify({
-            type: "active_users",
-            users: usersInRoom,
-            roomId: roomIdStr
-          }));
-        }
-      });
+      if (roomIdStr) {
+        broadcastActiveUsers(roomIdStr);
+      }
       return;
     }
 
@@ -141,6 +122,18 @@ wss.on('connection', async function connection(ws, request) {
     if (parsedData.type === "chat") {
 
       const roomId = Number(parsedData.roomId);
+      const roomIdStr = parsedData.roomId?.toString();
+
+      // Broadcast instantly before talking to the database
+      users.forEach(user => {
+        if (user.rooms.includes(roomIdStr) && user.ws !== ws && user.ws.readyState === WebSocket.OPEN) {
+          user.ws.send(JSON.stringify({
+            type: "chat",
+            message: parsedData.message,
+            roomId: roomIdStr
+          }));
+        }
+      });
 
       const room = await prismaClient.room.findUnique({
         where: { id: roomId }
@@ -159,23 +152,22 @@ wss.on('connection', async function connection(ws, request) {
         }
       });
 
-      // Broadcast
-      const roomIdStr = parsedData.roomId?.toString();
-      users.forEach(user => {
-        if (user.rooms.includes(roomIdStr) && user.ws !== ws) {
-          user.ws.send(JSON.stringify({
-            type: "chat",
-            message: parsedData.message,
-            roomId: roomIdStr
-          }));
-        }
-      });
       return;
     }
 
     // CLEAR BOARD (admin only)
     if (parsedData.type === "clear") {
       const roomId = Number(parsedData.roomId);
+
+      // Broadcast clear event to all users in this room instantly so it feels perfectly smooth
+      users.forEach(user => {
+        if (user.rooms.includes(String(roomId)) && user.ws.readyState === WebSocket.OPEN) {
+          user.ws.send(JSON.stringify({
+            type: "clear",
+            roomId: String(roomId)
+          }));
+        }
+      });
 
       const room = await prismaClient.room.findUnique({
         where: { id: roomId }
@@ -193,16 +185,6 @@ wss.on('connection', async function connection(ws, request) {
 
       await prismaClient.chat.deleteMany({
         where: { roomId }
-      });
-
-      // Broadcast clear event to all users in this room
-      users.forEach(user => {
-        if (user.rooms.includes(String(roomId))) {
-          user.ws.send(JSON.stringify({
-            type: "clear",
-            roomId: String(roomId)
-          }));
-        }
       });
 
       return;

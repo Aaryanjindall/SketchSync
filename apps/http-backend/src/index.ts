@@ -83,29 +83,13 @@ app.post("/signin", async (req: Request, res: Response): Promise<void> => {
   return;
 });
 
-app.get("/me", async (req: Request, res: Response): Promise<void> => {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader || typeof authHeader !== "string") {
-    res.status(403).json({ message: "Unauthorized" });
-    return;
-  }
-
-  let token: string;
-  if (authHeader.startsWith("Bearer ")) {
-    token = authHeader.slice(7);
-  } else {
-    token = authHeader;
-  }
-
+app.get("/me", middleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
-    if (!decoded || typeof decoded === "string" || !decoded.userId) {
-      res.status(403).json({ message: "Unauthorized" });
-      return;
-    }
+    // @ts-ignore
+    const userId = req.userId as string;
 
     const user = await prismaClient.user.findUnique({
-      where: { id: decoded.userId as string },
+      where: { id: userId },
       select: {
         id: true,
         email: true,
@@ -122,39 +106,14 @@ app.get("/me", async (req: Request, res: Response): Promise<void> => {
     return;
   } catch (e) {
     console.error("ME ERROR", e);
-    res.status(403).json({ message: "Unauthorized" });
+    res.status(500).json({ message: "Internal server error" });
     return;
   }
 });
 
-app.post("/room", async (req: Request, res: Response): Promise<void> => {
-  // Auth inside this handler to avoid any middleware issues
-  const authHeader = req.headers["authorization"];
-  if (!authHeader || typeof authHeader !== "string") {
-    res.status(403).json({ message: "Unauthorized" });
-    return;
-  }
-
-  let token: string;
-  if (authHeader.startsWith("Bearer ")) {
-    token = authHeader.slice(7);
-  } else {
-    token = authHeader;
-  }
-
-  let userId: string;
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
-    if (!decoded || typeof decoded === "string" || !decoded.userId) {
-      res.status(403).json({ message: "Unauthorized" });
-      return;
-    }
-    userId = decoded.userId;
-  } catch (e) {
-    console.error("ROOM AUTH ERROR", e);
-    res.status(403).json({ message: "Unauthorized" });
-    return;
-  }
+app.post("/room", middleware, async (req: Request, res: Response): Promise<void> => {
+  // @ts-ignore
+  const userId = req.userId as string;
 
   const parsedData = CreateRoomSchema.safeParse(req.body);
   if (!parsedData.success) {
